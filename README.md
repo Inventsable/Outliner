@@ -2,7 +2,9 @@
 
 Illustrator script to convert all artwork to a "permanent outline" mode, replacing all Appearances and manually drawing all anchors/handles:
 
-> ![](./example.png) _Result of script on left, original artwork on right._
+![](./example.png)
+
+_Result of script on left, original artwork on right._
 
 Created for practice, and by request of a reddit thread: [Is there a way to export an outline view + anchorpoints?](https://www.reddit.com/r/AdobeIllustrator/comments/e0nh4m/is_there_a_way_to_export_an_outline_view/)
 
