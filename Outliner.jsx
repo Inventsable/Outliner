@@ -1,4 +1,4 @@
-// https://github.com/Inventsable
+// https://github.com/Inventsable/Outliner
 // contact: tom@inventsable.cc
 //
 // Barebones script to convert all paths in current document to permanent Outlines, including handles and anchors.
@@ -24,8 +24,7 @@ convertAllToOutlines();
 function convertAllToOutlines() {
   // Need to collect all current pageItems otherwise recurses into it's own drawn anchors
   // app.activeDocument.pageItems is not chronological! Adding to it, even if decrementing, causes recursion
-  var targets = scanCurrentPageItems();
-  convertListToOutlines(targets);
+  convertListToOutlines(scanCurrentPageItems());
 }
 
 function scanCurrentPageItems() {
@@ -54,12 +53,8 @@ function convertListToOutlines(list) {
             if (point.rightDirection) drawHandle(point, "right");
           }
           item.opacity = forceOpacity ? 100.0 : item.opacity;
-        } else {
-          alert("Problem with " + item.name + ": " + item.typename);
         }
       }
-    } else {
-      alert(item.name + " " + item.typename);
     }
   }
 }
