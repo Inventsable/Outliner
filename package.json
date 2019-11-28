@@ -1,6 +1,6 @@
 {
   "name": "outliner",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Illustrator script to convert all artwork to a \"permanent outline\" mode, replacing all Appearances and manually drawing all anchors/handles:",
   "main": "index.js",
   "scripts": {
