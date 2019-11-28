@@ -16,15 +16,22 @@ var anchorIsFilled = false; // Boolean (true or false) if true, anchors are fill
 var outlineWidth = 1; // number in pixels, width of stroke
 var outlineColor = newRGB(0, 0, 0); // The RGB value of color ([0,0,0] = black)
 //
+var useLayerLabelColor = true; // Boolean, if true override above anchorColor and use the Layer's label instead
 var forceOpacity = true; // Boolean (true or false) if true, force all paths to have full opacity
 var overrideComplex = false; // Boolean -- if true, clone all objects and attempt to reconstruct.
 //          This only needs to be true if you have complex Appearances like multiple strokes per object
 
 /*
       Do not edit below unless you know what you're doing!
+
+      TODO:
+        - Add support for optional Release Clipping Mask
+          - Duplicate Mask per Content entry
+          - Use Pathfinder - Intersect on Mask and Contents
 */
 
 convertAllToOutlines();
+var doc = app.activeDocument;
 
 function convertAllToOutlines() {
   convertListToOutlines(scanCurrentPageItems());
@@ -90,59 +97,63 @@ function convertListToOutlines(list) {
       if (item.pathPoints && item.pathPoints.length)
         for (var p = 0; p < item.pathPoints.length; p++) {
           var point = item.pathPoints[p];
-          drawAnchor(point);
-          drawHandle(point, "left");
-          drawHandle(point, "right");
+          drawAnchor(point, item.layer);
+          drawHandle(point, "left", item.layer);
+          drawHandle(point, "right", item.layer);
           item.opacity = forceOpacity ? 100.0 : item.opacity;
         }
     }
   }
 }
 
-function drawAnchor(point) {
+function drawAnchor(point, layer) {
   var anchor = app.activeDocument.pathItems.rectangle(
     point.anchor[1] + anchorSize / 2,
     point.anchor[0] - anchorSize / 2,
     anchorSize,
     anchorSize
   );
-  setAnchorAppearance(anchor, false);
+  anchor.move(layer, ElementPlacement.PLACEATBEGINNING);
+  setAnchorAppearance(anchor, false, layer);
 }
-function drawHandle(point, direction) {
+function drawHandle(point, direction, layer) {
   if (
     Number(point.anchor[0]) !== Number(point[direction + "Direction"][0]) ||
     Number(point.anchor[1]) !== Number(point[direction + "Direction"][1])
   ) {
     var handle = app.activeDocument.pathItems.add();
     handle.setEntirePath([point.anchor, point[direction + "Direction"]]);
-    setAnchorAppearance(handle, true);
+    handle.move(layer, ElementPlacement.PLACEATBEGINNING);
+    setAnchorAppearance(handle, true, layer);
     var handleBar = app.activeDocument.pathItems.ellipse(
       point[direction + "Direction"][1] + handleSize / 2,
       point[direction + "Direction"][0] - handleSize / 2,
       handleSize,
       handleSize
     );
+    handleBar.move(layer, ElementPlacement.PLACEATBEGINNING);
     handleBar.stroked = false;
     handleBar.filled = true;
-    handleBar.fillColor = anchorColor;
+    handleBar.fillColor = useLayerLabelColor ? layer.color : anchorColor;
   }
 }
 
-function setAnchorAppearance(item, isHandle) {
+function setAnchorAppearance(item, isHandle, layer) {
+  var realColor = useLayerLabelColor ? layer.color : anchorColor;
   if (!isHandle) {
     item.filled = anchorIsFilled;
     item.stroked = !anchorIsFilled;
     if (!anchorIsFilled) {
       item.strokeWidth = anchorWidth;
-      item.strokeColor = anchorColor;
+      item.strokeColor = realColor;
     } else {
-      item.fillColor = anchorColor;
+      item.fillColor = realColor;
     }
   } else {
     item.filled = false;
     item.stroked = true;
     item.strokeWidth = anchorWidth;
-    item.strokeColor = anchorColor;
+    item.strokeColor = realColor;
   }
 }
 
