@@ -12,7 +12,9 @@ var anchorSize = 5; // number in pixels, height/width of rectangle
 var handleSize = 4; // number in pixels, size of ellipse/orb where handle is grabbed
 var anchorColor = newRGB(50, 50, 200); // RGB value, defaults to blue
 var anchorIsFilled = false; // Boolean, if true anchors are filled, otherwise have only stroke
+var useLayerLabelColor = true; // Boolean, if true override above anchorColor and use the Layer's label instead
 //
+var parentGroupLabel = "_nodes";
 var anchorLabel = "_anchor";
 var handleLabel = "_handle";
 var stickLabel = "_stick";
@@ -20,7 +22,6 @@ var stickLabel = "_stick";
 var outlineWidth = 1; // number in pixels, width of stroke
 var outlineColor = newRGB(35, 31, 32); // The RGB value of color (default rich black)
 //
-var useLayerLabelColor = true; // Boolean, if true override above anchorColor and use the Layer's label instead
 var forceOpacity = true; // Boolean, if true force all paths to have full opacity
 var overrideComplex = false; // Boolean, if true clone all objects and attempt to reconstruct them
 //          This only needs to be true if you have complex Appearances like multiple strokes per object
@@ -68,7 +69,7 @@ function convertListToOutlines(list) {
         ? app.activeDocument.groupItems.add()
         : null;
       if (groupRelated) {
-        parentgroup.name = item.name;
+        parentgroup.name = item.name + parentGroupLabel;
         parentgroup.move(item.layer, ElementPlacement.PLACEATBEGINNING);
       }
       if (item.pathPoints && item.pathPoints.length)
