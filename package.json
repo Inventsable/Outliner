@@ -1,0 +1,20 @@
+{
+  "name": "outliner",
+  "version": "1.0.0",
+  "description": "Illustrator script to convert all artwork to a \"permanent outline\" mode, replacing all Appearances and manually drawing all anchors/handles:",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Inventsable/Outliner.git"
+  },
+  "keywords": [],
+  "author": "Thomas Scharstein II <tom@inventsable.cc>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Inventsable/Outliner/issues"
+  },
+  "homepage": "https://github.com/Inventsable/Outliner#readme"
+}
