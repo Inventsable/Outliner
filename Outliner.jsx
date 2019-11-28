@@ -13,6 +13,10 @@ var handleSize = 4; // number in pixels, size of ellipse/orb where handle is gra
 var anchorColor = newRGB(50, 50, 200); // RGB value, defaults to blue
 var anchorIsFilled = false; // Boolean, if true anchors are filled, otherwise have only stroke
 //
+var anchorLabel = "_anchor";
+var handleLabel = "_handle";
+var stickLabel = "_stick";
+//
 var outlineWidth = 1; // number in pixels, width of stroke
 var outlineColor = newRGB(35, 31, 32); // The RGB value of color (default rich black)
 //
@@ -24,9 +28,7 @@ var mergeClippingMasks = true; // Boolean, if true will use Pathfinder > Interse
 //          If merging is true, requires an additional Undo command per item merged to get back to original
 var renameGenericPaths = true; // Boolean, if true will rename unnamed paths as their parent layer
 var generateIds = false; // Boolean, if true with generate names with 3 character unique identifiers
-
-// BROKEN, do not set to true
-var groupRelated = false;
+var groupRelated = true; // Boolean, if true create child groups for each handle within a parent group for anchor and both handles
 /*
 
       Do not edit below unless you know what you're doing!
@@ -38,6 +40,7 @@ var doc = app.activeDocument;
 
 function convertAllToOutlines() {
   convertListToOutlines(scanCurrentPageItems());
+  sortLayerContents();
 }
 
 // Return a list of current pathItems in activeDoc or their clones when overriding complex appearance
@@ -53,21 +56,6 @@ function scanCurrentPageItems() {
   }
 }
 
-function rollName(name, layer) {
-  var siblingCount = 0;
-  var nameRX = new RegExp(layer.name + "\\d*");
-  if (!generateIds)
-    for (var i = 0; i < layer.pathItems.length; i++)
-      if (
-        nameRX.test(layer.pathItems[i].name) &&
-        !/\[\d\]\[\d\].*/.test(layer.pathItems[i].name)
-      )
-        siblingCount++;
-  return generateIds
-    ? name + "_" + shortId() + "_"
-    : name + "[" + siblingCount + "]";
-}
-
 function convertListToOutlines(list) {
   for (var i = list.length - 1; i >= 0; i--) {
     var item = list[i];
@@ -76,29 +64,22 @@ function convertListToOutlines(list) {
       : item.name || item.parent.name || item.layer.name;
     if (item.stroked || item.filled) {
       replaceAppearance(item);
-      var group = groupRelated ? app.activeDocument.groupItems.add() : null;
+      var parentgroup = groupRelated
+        ? app.activeDocument.groupItems.add()
+        : null;
       if (groupRelated) {
-        group.move(item.layer, ElementPlacement.PLACEATBEGINNING);
-        group.name = item.name;
+        parentgroup.name = item.name;
+        parentgroup.move(item.layer, ElementPlacement.PLACEATBEGINNING);
       }
       if (item.pathPoints && item.pathPoints.length)
         for (var p = 0; p < item.pathPoints.length; p++) {
           var point = item.pathPoints[p];
-          drawAnchor(point, item.layer, item.name + "[" + p + "]", group);
-          drawHandle(
-            point,
-            "left",
-            item.layer,
-            item.name + "[" + p + "]",
-            group
-          );
-          drawHandle(
-            point,
-            "right",
-            item.layer,
-            item.name + "[" + p + "]",
-            group
-          );
+          var pointName = item.name + "[" + p + "]";
+          var group = groupRelated ? parentgroup.groupItems.add() : null;
+          if (groupRelated) group.name = pointName;
+          drawAnchor(point, item.layer, pointName, group);
+          drawHandle(point, "left", item.layer, pointName, group);
+          drawHandle(point, "right", item.layer, pointName, group);
           item.opacity = forceOpacity ? 100.0 : item.opacity;
         }
     }
@@ -106,7 +87,7 @@ function convertListToOutlines(list) {
 }
 
 function drawAnchor(point, layer, name, group) {
-  var anchor = group
+  var anchor = groupRelated
     ? group.pathItems.rectangle(
         point.anchor[1] + anchorSize / 2,
         point.anchor[0] - anchorSize / 2,
@@ -119,8 +100,8 @@ function drawAnchor(point, layer, name, group) {
         anchorSize,
         anchorSize
       );
-  anchor.name = name;
-  if (!group) anchor.move(layer, ElementPlacement.PLACEATBEGINNING);
+  anchor.name = name + anchorLabel;
+  if (!groupRelated) anchor.move(layer, ElementPlacement.PLACEATBEGINNING);
   setAnchorAppearance(anchor, false, layer);
   return [anchor];
 }
@@ -129,15 +110,15 @@ function drawHandle(point, direction, layer, name, group) {
     Number(point.anchor[0]) !== Number(point[direction + "Direction"][0]) ||
     Number(point.anchor[1]) !== Number(point[direction + "Direction"][1])
   ) {
-    var stick = group
+    var stick = groupRelated
       ? group.pathItems.add()
       : app.activeDocument.pathItems.add();
     stick.setEntirePath([point.anchor, point[direction + "Direction"]]);
-    if (!group) stick.move(layer, ElementPlacement.PLACEATBEGINNING);
-    stick.name = name + "_" + direction.charAt(0).toUpperCase() + "_stick";
+    if (!groupRelated) stick.move(layer, ElementPlacement.PLACEATBEGINNING);
+    stick.name = name + "_" + direction.charAt(0).toUpperCase() + stickLabel;
     setAnchorAppearance(stick, true, layer);
-    var handle = group
-      ? group.ellipse(
+    var handle = groupRelated
+      ? group.pathItems.ellipse(
           point[direction + "Direction"][1] + handleSize / 2,
           point[direction + "Direction"][0] - handleSize / 2,
           handleSize,
@@ -149,10 +130,10 @@ function drawHandle(point, direction, layer, name, group) {
           handleSize,
           handleSize
         );
-    if (!group) handle.move(layer, ElementPlacement.PLACEATBEGINNING);
+    if (!groupRelated) handle.move(layer, ElementPlacement.PLACEATBEGINNING);
     handle.stroked = false;
     handle.filled = true;
-    handle.name = name + "_" + direction.charAt(0).toUpperCase() + "_handle";
+    handle.name = name + "_" + direction.charAt(0).toUpperCase() + handleLabel;
     handle.fillColor = useLayerLabelColor ? layer.color : anchorColor;
     return [stick, handle];
   }
@@ -190,6 +171,38 @@ function newRGB(r, g, b) {
   color.green = g;
   color.blue = b;
   return color;
+}
+
+// Rearrange results per layer so anchor Groups are directly above their target path
+function sortLayerContents() {
+  for (var i = 0; i < app.activeDocument.layers.length; i++) {
+    var layer = app.activeDocument.layers[i];
+    for (var c = 0; c < layer.pathItems.length; c++)
+      layer.pathItems[c].zOrder(ZOrderMethod.BRINGTOFRONT);
+    var offset = layer.pathItems.length + 1;
+    for (var c = 0; c < layer.groupItems.length; c++) {
+      var group = layer.groupItems[c];
+      offset = Number(offset) - Number(1);
+      for (var z = 0; z < offset; z++) group.zOrder(ZOrderMethod.BRINGFORWARD);
+    }
+  }
+}
+
+// Generates a unique identifier for layer to use in children nodes
+function rollName(name, layer) {
+  var siblingCount = 0;
+  var nameRX = new RegExp(layer.name + "\\d*");
+  if (!generateIds)
+    for (var i = 0; i < layer.pathItems.length; i++)
+      if (
+        nameRX.test(layer.pathItems[i].name) &&
+        !/\[\d\]\[\d\].*/.test(layer.pathItems[i].name) &&
+        !/group/i.test(layer.pathItems[i].typename)
+      )
+        siblingCount++;
+  return generateIds
+    ? name + "_" + shortId() + "_"
+    : name + "[" + siblingCount + "]";
 }
 
 // Reconstruct all PathItems with basic data to override any complex appearances
@@ -258,12 +271,9 @@ function mergeClippingPaths() {
         sibling.selected = true;
         intersectAction();
         //
-        // Fix name transfer
+        // TODO
+        // If path has name, doing intersect creates a new path and this reference is lost.
         //
-        // for (var e = 0; v < parent.pathItems.length; e++) {
-        //   var child = parent.pathItems[e];
-        //   if (!child.tags.length && !child.clipping) child.name = lastname;
-        // }
       }
     app.selection = null;
     mask.selected = true;
@@ -274,10 +284,6 @@ function mergeClippingPaths() {
     //
     // Fix name transfer
     //
-    // for (var e = 0; v < parent.pathItems.length; e++) {
-    //   var child = parent.pathItems[e];
-    //   if (!child.tags.length && !child.clipping) child.name = lastname;
-    // }
     parent.selected = true;
     app.executeMenuCommand("ungroup");
     app.selection = null;
@@ -352,38 +358,3 @@ function shortId() {
     str += codex.charAt(randomInt(0, codex.length - 1));
   return str.toUpperCase();
 }
-
-// TODO - Ensure items are anomalously named for AE integration, via smart names instead of shortId
-
-// function nameExists(item) {
-//   var exists = false;
-//   for (var i = 0; i < item.parent.pathItems.length; i++) {
-//     if (
-//       item.parent.pathItems[i].name == item.name &&
-//       item !== item.parent.pathItems[i]
-//     )
-//       exists = true;
-//   }
-//   return exists;
-// }
-
-// function rollName(name) {
-// let index = 0;
-// while (nameExists(name + index)) index++;
-// return index > 0 ? name + index : name;
-// }
-// function nameExists(str) {
-//   for (var i = 0; i < nameList.length; i++) if (nameList[i] == str) return true;
-//   return false;
-// }
-// function generateName(item) {
-//   return item.name
-//     ? rollName(item.name)
-//     : renameGenericPaths
-//     ? item.parent.name
-//       ? rollName(item.parent.name) || item.layer.name
-//         ? rollName(item.layer.name)
-//         : item.name
-//       : item.name
-//     : item.name;
-// }
