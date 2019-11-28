@@ -22,7 +22,11 @@ var overrideComplex = false; // Boolean, if true clone all objects and attempt t
 //          This only needs to be true if you have complex Appearances like multiple strokes per object
 var mergeClippingMasks = true; // Boolean, if true will use Pathfinder > Intersect on all Clipping Masks and contents
 //          If merging is true, requires an additional Undo command per item merged to get back to original
+var renameGenericPaths = true; // Boolean, if true will rename unnamed paths as their parent layer
+var generateIds = false; // Boolean, if true with generate names with 3 character unique identifiers
 
+// BROKEN, do not set to true
+var groupRelated = false;
 /*
 
       Do not edit below unless you know what you're doing!
@@ -49,56 +53,108 @@ function scanCurrentPageItems() {
   }
 }
 
+function rollName(name, layer) {
+  var siblingCount = 0;
+  var nameRX = new RegExp(layer.name + "\\d*");
+  if (!generateIds)
+    for (var i = 0; i < layer.pathItems.length; i++)
+      if (
+        nameRX.test(layer.pathItems[i].name) &&
+        !/\[\d\]\[\d\].*/.test(layer.pathItems[i].name)
+      )
+        siblingCount++;
+  return generateIds
+    ? name + "_" + shortId() + "_"
+    : name + "[" + siblingCount + "]";
+}
+
 function convertListToOutlines(list) {
   for (var i = list.length - 1; i >= 0; i--) {
     var item = list[i];
-    var name = item.name || item.parent.name || item.layer.name;
+    item.name = renameGenericPaths
+      ? rollName(item.name || item.parent.name || item.layer.name, item.layer)
+      : item.name || item.parent.name || item.layer.name;
     if (item.stroked || item.filled) {
       replaceAppearance(item);
+      var group = groupRelated ? app.activeDocument.groupItems.add() : null;
+      if (groupRelated) {
+        group.move(item.layer, ElementPlacement.PLACEATBEGINNING);
+        group.name = item.name;
+      }
       if (item.pathPoints && item.pathPoints.length)
         for (var p = 0; p < item.pathPoints.length; p++) {
           var point = item.pathPoints[p];
-          drawAnchor(point, item.layer, name + "[" + p + "]");
-          drawHandle(point, "left", item.layer, name + "[" + p + "]");
-          drawHandle(point, "right", item.layer, name + "[" + p + "]");
+          drawAnchor(point, item.layer, item.name + "[" + p + "]", group);
+          drawHandle(
+            point,
+            "left",
+            item.layer,
+            item.name + "[" + p + "]",
+            group
+          );
+          drawHandle(
+            point,
+            "right",
+            item.layer,
+            item.name + "[" + p + "]",
+            group
+          );
           item.opacity = forceOpacity ? 100.0 : item.opacity;
         }
     }
   }
 }
 
-function drawAnchor(point, layer, name) {
-  var anchor = app.activeDocument.pathItems.rectangle(
-    point.anchor[1] + anchorSize / 2,
-    point.anchor[0] - anchorSize / 2,
-    anchorSize,
-    anchorSize
-  );
+function drawAnchor(point, layer, name, group) {
+  var anchor = group
+    ? group.pathItems.rectangle(
+        point.anchor[1] + anchorSize / 2,
+        point.anchor[0] - anchorSize / 2,
+        anchorSize,
+        anchorSize
+      )
+    : app.activeDocument.pathItems.rectangle(
+        point.anchor[1] + anchorSize / 2,
+        point.anchor[0] - anchorSize / 2,
+        anchorSize,
+        anchorSize
+      );
   anchor.name = name;
-  anchor.move(layer, ElementPlacement.PLACEATBEGINNING);
+  if (!group) anchor.move(layer, ElementPlacement.PLACEATBEGINNING);
   setAnchorAppearance(anchor, false, layer);
+  return [anchor];
 }
-function drawHandle(point, direction, layer, name) {
+function drawHandle(point, direction, layer, name, group) {
   if (
     Number(point.anchor[0]) !== Number(point[direction + "Direction"][0]) ||
     Number(point.anchor[1]) !== Number(point[direction + "Direction"][1])
   ) {
-    var stick = app.activeDocument.pathItems.add();
+    var stick = group
+      ? group.pathItems.add()
+      : app.activeDocument.pathItems.add();
     stick.setEntirePath([point.anchor, point[direction + "Direction"]]);
-    stick.move(layer, ElementPlacement.PLACEATBEGINNING);
+    if (!group) stick.move(layer, ElementPlacement.PLACEATBEGINNING);
     stick.name = name + "_" + direction.charAt(0).toUpperCase() + "_stick";
     setAnchorAppearance(stick, true, layer);
-    var handle = app.activeDocument.pathItems.ellipse(
-      point[direction + "Direction"][1] + handleSize / 2,
-      point[direction + "Direction"][0] - handleSize / 2,
-      handleSize,
-      handleSize
-    );
-    handle.move(layer, ElementPlacement.PLACEATBEGINNING);
+    var handle = group
+      ? group.ellipse(
+          point[direction + "Direction"][1] + handleSize / 2,
+          point[direction + "Direction"][0] - handleSize / 2,
+          handleSize,
+          handleSize
+        )
+      : app.activeDocument.pathItems.ellipse(
+          point[direction + "Direction"][1] + handleSize / 2,
+          point[direction + "Direction"][0] - handleSize / 2,
+          handleSize,
+          handleSize
+        );
+    if (!group) handle.move(layer, ElementPlacement.PLACEATBEGINNING);
     handle.stroked = false;
     handle.filled = true;
     handle.name = name + "_" + direction.charAt(0).toUpperCase() + "_handle";
     handle.fillColor = useLayerLabelColor ? layer.color : anchorColor;
+    return [stick, handle];
   }
 }
 
@@ -182,24 +238,48 @@ function mergeClippingPaths() {
   var masks = app.selection;
   for (var i = 0; i < masks.length; i++) {
     var mask = masks[i];
+    var parent = mask.parent;
     var siblings = [];
-    for (var v = 0; v < mask.parent.pathItems.length; v++) {
-      var child = mask.parent.pathItems[v];
-      if (!child.clipping) siblings.push(child);
+    for (var v = 0; v < parent.pathItems.length; v++) {
+      var child = parent.pathItems[v];
+      if (!child.clipping) {
+        // var tag = child.tags.add();
+        // tag.name = "marked";
+        siblings.push(child);
+      }
     }
     if (siblings.length > 1)
       for (var v = 1; v < siblings.length; v++) {
         app.selection = null;
         var dupe = mask.duplicate();
         var sibling = siblings[v];
+        var lastname = sibling.name;
         dupe.selected = true;
         sibling.selected = true;
         intersectAction();
+        //
+        // Fix name transfer
+        //
+        // for (var e = 0; v < parent.pathItems.length; e++) {
+        //   var child = parent.pathItems[e];
+        //   if (!child.tags.length && !child.clipping) child.name = lastname;
+        // }
       }
     app.selection = null;
     mask.selected = true;
     siblings[0].selected = true;
+    var lastname = siblings[0].name;
     intersectAction();
+    app.selection = null;
+    //
+    // Fix name transfer
+    //
+    // for (var e = 0; v < parent.pathItems.length; e++) {
+    //   var child = parent.pathItems[e];
+    //   if (!child.tags.length && !child.clipping) child.name = lastname;
+    // }
+    parent.selected = true;
+    app.executeMenuCommand("ungroup");
     app.selection = null;
   }
 }
@@ -260,3 +340,50 @@ function intersectAction() {
     f.remove();
   }
 }
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1) + min);
+}
+
+function shortId() {
+  var str = "";
+  var codex = "0123456789abcdefghijklmnopqrstuvwxyz";
+  for (var i = 0; i <= 2; i++)
+    str += codex.charAt(randomInt(0, codex.length - 1));
+  return str.toUpperCase();
+}
+
+// TODO - Ensure items are anomalously named for AE integration, via smart names instead of shortId
+
+// function nameExists(item) {
+//   var exists = false;
+//   for (var i = 0; i < item.parent.pathItems.length; i++) {
+//     if (
+//       item.parent.pathItems[i].name == item.name &&
+//       item !== item.parent.pathItems[i]
+//     )
+//       exists = true;
+//   }
+//   return exists;
+// }
+
+// function rollName(name) {
+// let index = 0;
+// while (nameExists(name + index)) index++;
+// return index > 0 ? name + index : name;
+// }
+// function nameExists(str) {
+//   for (var i = 0; i < nameList.length; i++) if (nameList[i] == str) return true;
+//   return false;
+// }
+// function generateName(item) {
+//   return item.name
+//     ? rollName(item.name)
+//     : renameGenericPaths
+//     ? item.parent.name
+//       ? rollName(item.parent.name) || item.layer.name
+//         ? rollName(item.layer.name)
+//         : item.name
+//       : item.name
+//     : item.name;
+// }
