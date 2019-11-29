@@ -1,4 +1,7 @@
 /*
+      TODO:
+        -- Additional font support?
+
       https://github.com/Inventsable/Outliner
       contact: tom@inventsable.cc
 
@@ -7,21 +10,21 @@
 
       You can edit the below settings:
 */
-var anchorWidth = 1; // number in pixels, width of stroke
-var anchorSize = 5; // number in pixels, height/width of rectangle
-var handleSize = 4; // number in pixels, size of ellipse/orb where handle is grabbed
+var anchorWidth = 4; // number in pixels, width of stroke
+var anchorSize = 20; // number in pixels, height/width of rectangle
+var handleSize = 25; // number in pixels, size of ellipse/orb where handle is grabbed
 var anchorColor = newRGB(50, 50, 200); // RGB value, defaults to blue
 var anchorIsFilled = false; // Boolean, if true anchors are filled, otherwise have only stroke
-var useLayerLabelColor = true; // Boolean, if true override above anchorColor and use the Layer's label instead
 //
 var parentGroupLabel = "_nodes";
 var anchorLabel = "_anchor";
 var handleLabel = "_handle";
 var stickLabel = "_stick";
 //
-var outlineWidth = 1; // number in pixels, width of stroke
+var outlineWidth = 5; // number in pixels, width of stroke
 var outlineColor = newRGB(35, 31, 32); // The RGB value of color (default rich black)
 //
+var useLayerLabelColor = true; // Boolean, if true override above anchorColor and use the Layer's label instead
 var forceOpacity = true; // Boolean, if true force all paths to have full opacity
 var overrideComplex = false; // Boolean, if true clone all objects and attempt to reconstruct them
 //          This only needs to be true if you have complex Appearances like multiple strokes per object
@@ -36,7 +39,7 @@ var groupRelated = true; // Boolean, if true create child groups for each handle
 
 */
 
-convertAllToOutlines();
+// convertAllToOutlines();
 var doc = app.activeDocument;
 
 function convertAllToOutlines() {
@@ -61,7 +64,11 @@ function convertListToOutlines(list) {
   for (var i = list.length - 1; i >= 0; i--) {
     var item = list[i];
     item.name = renameGenericPaths
-      ? rollName(item.name || item.parent.name || item.layer.name, item.layer)
+      ? rollName(
+          item.name || item.parent.name || item.layer.name,
+          item,
+          item.layer
+        )
       : item.name || item.parent.name || item.layer.name;
     if (item.stroked || item.filled) {
       replaceAppearance(item);
@@ -190,14 +197,14 @@ function sortLayerContents() {
 }
 
 // Generates a unique identifier for layer to use in children nodes
-function rollName(name, layer) {
+function rollName(name, item, layer) {
   var siblingCount = 0;
-  var nameRX = new RegExp(layer.name + "\\d*");
+  var nameRX = new RegExp(name + "\\[\\d\\].*");
   if (!generateIds)
     for (var i = 0; i < layer.pathItems.length; i++)
       if (
         nameRX.test(layer.pathItems[i].name) &&
-        !/\[\d\]\[\d\].*/.test(layer.pathItems[i].name) &&
+        layer.pathItems[i] !== item &&
         !/group/i.test(layer.pathItems[i].typename)
       )
         siblingCount++;
@@ -250,6 +257,7 @@ function mergeClippingPaths() {
   app.selection = null;
   app.executeMenuCommand("Clipping Masks menu item");
   var masks = app.selection;
+  if (app.selection.length < 1) return null;
   for (var i = 0; i < masks.length; i++) {
     var mask = masks[i];
     var parent = mask.parent;
