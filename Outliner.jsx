@@ -39,7 +39,7 @@ var groupRelated = true; // Boolean, if true create child groups for each handle
 
 */
 
-// convertAllToOutlines();
+convertAllToOutlines();
 var doc = app.activeDocument;
 
 function convertAllToOutlines() {
@@ -221,7 +221,7 @@ function cloneAllPathItems() {
   for (var i = app.activeDocument.pathItems.length - 1; i >= 0; i--) {
     var item = app.activeDocument.pathItems[i];
     var clone = {
-      pathPoints: []
+      pathPoints: [],
     };
     for (var v = 0; v < cloneProps.length; v++) {
       var prop = cloneProps[v];
@@ -340,7 +340,7 @@ function intersectAction() {
     "			/value 1",
     "		}",
     "	}",
-    "}"
+    "}",
   ].join("\n");
   createAction(ActionString);
   var ActionString = null;
